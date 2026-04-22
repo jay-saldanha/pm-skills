@@ -29,14 +29,24 @@ Fetch and display every open pull request in `sardine-ai/risk-docs` authored by 
 
 4. **Sort** by PR number descending (newest first).
 
-5. **Output a single Markdown table**:
+5. **Output two Markdown tables** — one for each group:
+
+   **Group 1 — By Author** (group rows by `author.login`, sorted by author name, then PR number descending within each author):
+
+   Show a `### author-login` subheading before each author's rows.
+
+   | PR | Title | Review Status | Reviewer(s) | Conflicts | Date |
+   |----|-------|---------------|-------------|-----------|------|
+   | [#1357](url) | Update iOS changelog with Xcode 26 warning | 🔵 Review needed | gisu-kim-sardine: requested | | Apr 22 |
+
+   **Group 2 — Full flat table** (all PRs together, sorted by PR number descending):
 
    | PR | Title | Author | Review Status | Reviewer(s) | Conflicts | Date |
    |----|-------|--------|---------------|-------------|-----------|------|
    | [#1357](url) | Update iOS changelog with Xcode 26 warning | jay-saldanha | 🔵 Review needed | gisu-kim-sardine: requested | | Apr 22 |
    | [#1293](url) | feat: updated react native integration pages | gisu-kim-sardine | ✅ Approved | jay-saldanha: approved, devsherif: requested | ⚠️ CONFLICT | Apr 1 |
 
-6. **Print a summary line** below the table, e.g.:
-   > **38 open PRs** — 5 approved and waiting to merge, 2 confirmed conflicts. X closed/merged since last checked.
+6. **Print a summary line** below the tables, e.g.:
+   > **38 open PRs** across 6 authors — 5 approved and waiting to merge, 2 confirmed conflicts. X closed/merged since last checked.
 
    If the previous run's count is known from context, note how many PRs were added or closed since then.
