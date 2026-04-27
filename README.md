@@ -34,9 +34,15 @@ General-purpose productivity and workflow skills.
 | Skill | What it does |
 |-------|--------------|
 | `/sync-claude-skills` | List all available Claude skills and sync them to the Notion skills reference page |
+| `/notion-to-gh` | Sync new skills from the Notion skills page to the pm-skills GitHub repo — creates a folder and SKILL.md stub for each new skill, and updates the README |
 | `/work-summary-update` | Update the Work Summary Tracker Notion page with last month's GitHub/Slack/Asana/Notion activity |
 | `/stop-slop` | Eliminate predictable AI writing patterns from prose |
-| `/my-risk-docs-prs` | Alias for risk-docs-my-prs |
+| `/update-config` | Configure the Claude Code harness via `settings.json` — hooks, permissions, automated behaviors, environment variables |
+| `/keybindings-help` | Customize keyboard shortcuts in `~/.claude/keybindings.json` — rebind keys, add chord shortcuts, change the submit key |
+| `/simplify` | Review recently changed code for reuse, quality, and efficiency, then fix any issues found |
+| `/loop` | Run a prompt or slash command on a recurring interval — use for polling, status checks, or repeating a task on a schedule |
+| `/schedule` | Create, update, list, or run scheduled remote agents on a cron schedule |
+| `/claude-api` | Build apps using the Claude API or Anthropic SDK (Python/TypeScript) with prompt caching |
 
 ## Notion Reference
 
