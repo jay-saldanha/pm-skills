@@ -18,6 +18,13 @@ End-to-end automation for collecting, synthesizing, and acting on NPS feedback.
 | `/nps-pfrs` | 6 | Create Asana PFR tasks from synthesized themes |
 | `/nps-pipeline` | Full | Run the full NPS pipeline end-to-end |
 
+### Release Notes
+Skills for managing the monthly product release notes workflow.
+
+| Skill | What it does |
+|-------|--------------|
+| `/rn-sync` | Sync newly moved "In Progress" tasks from the Asana Release Notes project to the current month's Notion release notes page |
+
 ### Technical Writing / risk-docs
 Skills for managing the `sardine-ai/risk-docs` API documentation repo and Asana TW queue.
 
