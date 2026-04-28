@@ -125,9 +125,9 @@ Use `mcp__claude_ai_Notion__notion-update-page` with `command: update_content`. 
 
 ---
 
-### Step 7 — Update Asana for newly added tasks
+### Step 7 — Update Asana for all tasks with a Notion entry
 
-For each task that was successfully added to Notion in Step 6, do both of the following in parallel per task:
+For **every** In Progress task whose entry exists in the Notion page (both newly added in Step 6 AND tasks that were already present), do both of the following in parallel per task:
 
 **A. Move to Completed section**
 
@@ -149,7 +149,7 @@ text: "Added to release notes ✓\n\n<Notion page URL>"
 
 Use the full canonical Notion page URL (e.g. `https://www.notion.so/sardine/April-2026-Release-Notes-32dd52e0dd8b8093a239e635c47160ed`).
 
-Do not move or comment on tasks that were already present in Notion (skipped tasks).
+This applies to all tasks whose release notes entry is confirmed in Notion — whether it was just added or was already there from a prior run.
 
 ---
 
