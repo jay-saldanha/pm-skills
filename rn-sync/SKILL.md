@@ -1,17 +1,18 @@
 ---
 name: rn-sync
-description: Sync newly moved "In Progress" tasks from the Asana Release Notes project to the current month's Notion release notes page. Adds new entries in the standard release notes format; skips tasks already present.
+description: Sync newly moved "In Progress" tasks from the Asana Release Notes project to the current month's Notion release notes page. Adds new entries in the standard release notes format; skips tasks already present. Also flags missing videos and mismatched Release Month values.
 disable-model-invocation: false
 argument-hint: "[notion-page-url]"
 ---
 
 ## Task: Sync Asana In Progress → Notion Release Notes
 
-Check the Asana Release Notes project "In Progress" section and add any new tasks to the Notion release notes page, following the established entry format.
+Check the Asana Release Notes project "In Progress" section and add any new tasks to the Notion release notes page, following the established entry format. Also audit the page for missing video demos and check each Asana task's "Release Month" field against the target month.
 
 **Asana project:** Release Notes  
 **Asana project GID:** `1213848374258762`  
 **In Progress section GID:** `1213836732664070`  
+**Release Month custom field GID:** `1213836743338972`  
 **Release Notes parent Notion page:** `https://www.notion.so/17ad52e0dd8b80cfae8bdd26b71554fb`
 
 ---
@@ -31,6 +32,8 @@ If no argument was given:
 - Find the child page matching the current month and year (e.g. "April 2026 Release Notes")
 - Use that page's URL for all subsequent steps
 
+Extract the **target month** from the page title (e.g. "April 2026"). This is used in Step 4 to validate Release Month fields.
+
 ---
 
 ### Step 2 — Fetch data in parallel
@@ -41,9 +44,18 @@ Run both simultaneously:
 
 Use `mcp__claude_ai_Asana__get_tasks` with:
 - `section`: `1213836732664070`
-- `opt_fields`: `name,notes,assignee`
+- `opt_fields`: `name,notes,assignee,custom_fields`
 
-The result may be very large — save it and use `jq` to extract just `gid`, `name`, and `notes` per task.
+The result may be very large — save it and use `jq` to extract `gid`, `name`, `notes`, and the value of the `Release Month` custom field (GID `1213836743338972`) per task:
+
+```bash
+jq '[.data[] | {
+  gid,
+  name,
+  notes,
+  release_month: (.custom_fields[] | select(.gid == "1213836743338972") | .text_value) // null
+}]' <file>
+```
 
 **B. Notion page content**
 
@@ -58,20 +70,36 @@ From the Notion page content, collect all existing `## ` heading titles (these a
 For each Asana task, check whether a heading closely matching its name already exists in the Notion page:
 - Strip tags like `[P0]`, `[P1]`, `[Swan]`, etc. from the Asana task name before comparing
 - Use case-insensitive substring matching
-- If a match is found → skip (already added)
-- If no match → mark as new
-
-If all tasks are already present, report that and stop.
+- If a match is found → mark as **existing**
+- If no match → mark as **new**
 
 ---
 
-### Step 4 — Enrich new tasks (optional, run in parallel)
+### Step 4 — Check Release Month for all In Progress tasks
 
-For any new task whose `notes` contain a Notion URL, fetch that Notion page to get richer content for the release notes entry.
+For every task (new and existing), compare its `release_month` value against the target month:
+
+- Parse the target month from the Notion page title (e.g. "April 2026" → match strings like "April 2026", "Apr 2026", "04/2026", or just "April")
+- If `release_month` is null/empty → flag as **⚠️ Release Month not set**
+- If `release_month` does not match the target month → flag as **⚠️ Release Month mismatch** (show the actual value)
+- If it matches → ✓
 
 ---
 
-### Step 5 — Add new entries to Notion
+### Step 5 — Check for missing video demos
+
+Scan the Notion page content for all feature entries. For each `## ` heading that represents a feature (exclude `## SDK Changelogs`, `## Feature 1`, and any heading that is just `##`):
+
+Check if the `## Video Demo` block immediately following that entry contains only `Coming soon` (or is empty).
+
+- If `Coming soon` or empty → flag as **⚠️ Video missing**
+- If it contains any other content (a URL, an embedded video, etc.) → ✓
+
+---
+
+### Step 6 — Add new entries to Notion
+
+If there are no new tasks, skip this step.
 
 For each new task, construct a release notes entry in this format:
 
@@ -88,27 +116,48 @@ Author: \<please tag yourself here so that I know who added these\>
 Coming soon
 ```
 
+Before writing, fetch any Notion URLs found in the task notes to enrich the entry content.
+
 Insert all new entries before the `## SDK Changelogs` section (or at the end of the page if that section doesn't exist).
 
-Use `mcp__claude_ai_Notion__notion-update-page` with `command: update_content` and a single `content_updates` array. Target the last `## Video Demo\nComing soon\n## SDK Changelogs` sequence as the `old_str` anchor (unique because SDK Changelogs appears only once).
-
-If there is no SDK Changelogs section, append to the end of the page.
+Use `mcp__claude_ai_Notion__notion-update-page` with `command: update_content`. Target the last `## Video Demo\nComing soon\n## SDK Changelogs` sequence as the `old_str` anchor (unique because SDK Changelogs appears only once).
 
 ---
 
-### Step 6 — Report results
+### Step 7 — Report results
 
-Print a brief summary:
+Print a full summary with three sections:
+
+---
+
+**Sync results**
 
 ```
-Added X new entries to [Page Title]:
+Added X new entries:
 - Task name 1
 - Task name 2
-...
 
 Already present (skipped):
 - Task name A
 - Task name B
 ```
 
-If no new tasks were found, say so clearly.
+---
+
+**⚠️ Release Month issues** (only shown if there are problems)
+
+| Task | Release Month in Asana | Expected |
+|------|----------------------|----------|
+| Task name | April 2025 | April 2026 |
+| Task name | (not set) | April 2026 |
+
+If all tasks have the correct Release Month, print: ✓ All Release Month values match.
+
+---
+
+**⚠️ Missing video demos** (only shown if there are entries without videos)
+
+- Feature name 1
+- Feature name 2
+
+If all entries have videos, print: ✓ All entries have video demos.
