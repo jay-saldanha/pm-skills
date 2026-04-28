@@ -125,21 +125,9 @@ Use `mcp__claude_ai_Notion__notion-update-page` with `command: update_content`. 
 
 ---
 
-### Step 7 — Update Asana for all tasks with a Notion entry
+### Step 7 — Comment on Asana tasks whose entry exists in Notion
 
-For **every** In Progress task whose entry exists in the Notion page (both newly added in Step 6 AND tasks that were already present), do both of the following in parallel per task:
-
-**A. Move to Completed section**
-
-Use `mcp__claude_ai_Asana__update_tasks` with:
-```json
-{
-  "task_id": "<task GID>",
-  "memberships": [{"project": "1213848374258762", "section": "1213836732664072"}]
-}
-```
-
-**B. Add a comment**
+For **every** In Progress task whose entry exists in the Notion page (both newly added in Step 6 AND tasks that were already present), add a comment:
 
 Use `mcp__claude_ai_Asana__add_comment` with:
 ```
@@ -149,7 +137,7 @@ text: "Added to release notes ✓\n\n<Notion page URL>"
 
 Use the full canonical Notion page URL (e.g. `https://www.notion.so/sardine/April-2026-Release-Notes-32dd52e0dd8b8093a239e635c47160ed`).
 
-This applies to all tasks whose release notes entry is confirmed in Notion — whether it was just added or was already there from a prior run.
+**Do NOT move tasks to the Completed section.** Tasks stay in In Progress until their video demo is recorded and added to the Notion entry. Moving to Completed is done manually once the video is ready.
 
 ---
 
@@ -162,11 +150,11 @@ Print a full summary with three sections:
 **Sync results**
 
 ```
-Added X new entries (moved to Completed in Asana + commented):
+Added X new entries (commented in Asana):
 - Task name 1
 - Task name 2
 
-Already present (skipped):
+Already present (commented in Asana):
 - Task name A
 - Task name B
 ```
