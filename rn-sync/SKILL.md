@@ -12,6 +12,7 @@ Check the Asana Release Notes project "In Progress" section and add any new task
 **Asana project:** Release Notes  
 **Asana project GID:** `1213848374258762`  
 **In Progress section GID:** `1213836732664070`  
+**Completed section GID:** `1213836732664072`  
 **Release Month custom field GID:** `1213836743338972`  
 **Release Notes parent Notion page:** `https://www.notion.so/17ad52e0dd8b80cfae8bdd26b71554fb`
 
@@ -124,7 +125,35 @@ Use `mcp__claude_ai_Notion__notion-update-page` with `command: update_content`. 
 
 ---
 
-### Step 7 — Report results
+### Step 7 — Update Asana for newly added tasks
+
+For each task that was successfully added to Notion in Step 6, do both of the following in parallel per task:
+
+**A. Move to Completed section**
+
+Use `mcp__claude_ai_Asana__update_tasks` with:
+```json
+{
+  "task_id": "<task GID>",
+  "memberships": [{"project": "1213848374258762", "section": "1213836732664072"}]
+}
+```
+
+**B. Add a comment**
+
+Use `mcp__claude_ai_Asana__add_comment` with:
+```
+task_id: <task GID>
+text: "Added to release notes ✓\n\n<Notion page URL>"
+```
+
+Use the full canonical Notion page URL (e.g. `https://www.notion.so/sardine/April-2026-Release-Notes-32dd52e0dd8b8093a239e635c47160ed`).
+
+Do not move or comment on tasks that were already present in Notion (skipped tasks).
+
+---
+
+### Step 8 — Report results
 
 Print a full summary with three sections:
 
@@ -133,7 +162,7 @@ Print a full summary with three sections:
 **Sync results**
 
 ```
-Added X new entries:
+Added X new entries (moved to Completed in Asana + commented):
 - Task name 1
 - Task name 2
 
