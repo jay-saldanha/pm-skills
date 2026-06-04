@@ -18,6 +18,13 @@ End-to-end automation for collecting, synthesizing, and acting on NPS feedback.
 | `/nps-pfrs` | 6 | Create Asana PFR tasks from synthesized themes |
 | `/nps-pipeline` | Full | Run the full NPS pipeline end-to-end |
 
+### Product Insights
+Skills for continuous customer discovery and sentiment analysis.
+
+| Skill | What it does |
+|-------|--------------|
+| `/dashboard-sentiment` | Weekly customer sentiment scan for Investigative Tools — pulls signals from Pylon, Asana, Notion, and Slack; synthesizes themes with PRD-ready problem statements; creates a Notion report and sends a Slack DM summary |
+
 ### Release Notes
 Skills for managing the monthly product release notes workflow.
 
