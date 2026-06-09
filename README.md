@@ -38,6 +38,7 @@ Skills for managing the `sardine-ai/risk-docs` API documentation repo and Asana 
 | Skill | What it does |
 |-------|--------------|
 | `/apireference-audit` | Audit request/response example coverage across API reference YAML files |
+| `/risk-docs-drift` | Detect drift between the internal sardine-kb and external risk-docs — flags stale pages, missing coverage, and orphans; gates proposals through a content-leak filter; opens PRs, writes a Notion report, and logs an Asana ticket |
 | `/risk-docs-my-prs` | List all open PRs in risk-docs assigned to or created by me |
 | `/risk-docs-new-pages` | List all new content pages created since a given date |
 | `/tw-inbox-prs` | Create draft PRs for the newest and oldest inbox tickets in the TW Asana board |
