@@ -19,12 +19,12 @@ End-to-end automation for collecting, synthesizing, and acting on NPS feedback.
 | `/nps-pipeline` | Full | Run the full NPS pipeline end-to-end |
 
 ### Product Specs & Prioritization
-Skills for turning customer/Asana requests into engineering-ready requirements, and for triaging and prioritizing the PFR backlog.
+Two-step workflow: `/pfr-triage` decides *what's worth building*, then `/dashboard-feature-spec` defines *what to build*. Triage emits a ready-to-run handoff list of `/dashboard-feature-spec` commands.
 
 | Skill | What it does |
 |-------|--------------|
-| `/dashboard-feature-spec` | Turn an Asana feature-request task into engineering feature requirements grounded in the device-dashboard codebase — investigates current state via Explore agents and the sardine-kb, outputs a structured spec |
-| `/pfr-triage` | Score and prioritize untriaged PFRs using an adapted RICE rubric — batch-ranks the whole intake section or scores a single task on demand; recommends Priority + T-shirt Size; flags priority mismatches and strategic overrides; read-only output only |
+| `/pfr-triage` | **Step 1.** Score and rank untriaged PFRs using adapted RICE (ARR-driven) — batch or single-task; recommends Priority + T-shirt Size; flags mismatches and strategic overrides; ends with a copy-pasteable `/dashboard-feature-spec` handoff list. Read-only. |
+| `/dashboard-feature-spec` | **Step 2.** Turn a triaged PFR into a PM-quality requirements spec — investigates current dashboard behavior via Explore agents and the sardine-kb; outputs Problem / Current State / Requirements / Acceptance Criteria. Accepts a handoff link directly from `/pfr-triage`. |
 
 ### Product Insights
 Skills for continuous customer discovery and sentiment analysis.

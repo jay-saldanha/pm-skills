@@ -7,6 +7,8 @@ description: Score and prioritize untriaged PFRs in the Asana PFR board using an
 
 **This skill is read-only. It never writes to Asana.** It produces a ranked table (batch mode) or a single scoring breakdown (single-task mode) that Jayana uses to manually set `Priority` and `Size` fields in Asana.
 
+**Pipeline position:** This is Step 1 of a two-step PM workflow. After triage, use `/dashboard-feature-spec <url>` to produce a full requirements/spec doc for each prioritized PFR. The handoff list at the end of each run gives you the exact commands to run next.
+
 ---
 
 ## Modes
@@ -155,6 +157,32 @@ Score scope by layers touched × data work × breadth. When the `Size` field is 
 
 5. **End with a brief summary**: how many scored, how many Needs More Info, biggest priority corrections found (e.g. "3 tasks set Low that compute High").
 
+6. **Handoff to `/dashboard-feature-spec`**
+
+   Emit a copy-pasteable block of follow-on commands, grouped by recommended Priority (Very High first → Low last). **Exclude Needs-More-Info tasks** — those go to On Hold, not to a spec. Use the `⚠ non-dashboard` flag for PFRs whose Product Area is not Dashboard/Case Management/Alert Queue (e.g. Rule engine, API, Data infrastructure) — `/dashboard-feature-spec` uses the device-dashboard codebase for Current State, so those sections will be thinner.
+
+   Precede the block with:
+   > "Apply the recommended Priority and Size in Asana first (so the spec reads the corrected fields), then run the commands below top-to-bottom. The recommended values are in each comment if you haven't updated Asana yet."
+
+   Format:
+   ```
+   ## Handoff — /dashboard-feature-spec
+
+   # Very High
+   /dashboard-feature-spec https://app.asana.com/0/1201824753129207/<gid>   # → Very High · Size S
+   /dashboard-feature-spec https://app.asana.com/0/1201824753129207/<gid>   # → Very High · Size M · ⚠ non-dashboard (Rule engine)
+
+   # High
+   /dashboard-feature-spec https://app.asana.com/0/1201824753129207/<gid>   # → High · Size S
+   ...
+
+   # Medium
+   ...
+
+   # Low
+   ...
+   ```
+
 ---
 
 ## Steps — Single-Task Mode
@@ -186,6 +214,14 @@ Score scope by layers touched × data work × breadth. When the `Size` field is 
 ```
 
 3. If the task's current `Priority` differs from the recommendation, call it out clearly: "Current: Low. Recommend updating to: High (⬆ 2 bands). Key driver: ARR $1.06M with low effort."
+
+4. **Handoff line** (omit if the task is flagged ⚠ Needs-More-Info):
+
+   ```
+   Next: /dashboard-feature-spec https://app.asana.com/0/1201824753129207/<gid>   # → <Priority> · Size <S>
+   ```
+
+   If this is a non-dashboard PFR, append `· ⚠ non-dashboard (<Product Area>) — Current State section will be partial`.
 
 ---
 
