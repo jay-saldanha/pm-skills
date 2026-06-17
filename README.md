@@ -18,12 +18,13 @@ End-to-end automation for collecting, synthesizing, and acting on NPS feedback.
 | `/nps-pfrs` | 6 | Create Asana PFR tasks from synthesized themes |
 | `/nps-pipeline` | Full | Run the full NPS pipeline end-to-end |
 
-### Product Specs
-Skills for turning customer/Asana requests into engineering-ready requirements.
+### Product Specs & Prioritization
+Skills for turning customer/Asana requests into engineering-ready requirements, and for triaging and prioritizing the PFR backlog.
 
 | Skill | What it does |
 |-------|--------------|
 | `/dashboard-feature-spec` | Turn an Asana feature-request task into engineering feature requirements grounded in the device-dashboard codebase — investigates current state via Explore agents and the sardine-kb, outputs a structured spec |
+| `/pfr-triage` | Score and prioritize untriaged PFRs using an adapted RICE rubric — batch-ranks the whole intake section or scores a single task on demand; recommends Priority + T-shirt Size; flags priority mismatches and strategic overrides; read-only output only |
 
 ### Product Insights
 Skills for continuous customer discovery and sentiment analysis.
