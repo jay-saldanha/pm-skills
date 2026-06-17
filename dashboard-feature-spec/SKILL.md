@@ -49,6 +49,17 @@ Summarize the ask in one sentence before proceeding.
 
 ---
 
+### Step 2b — Determine spec depth
+
+Based on the `Size` field (or the recommended size from a `/pfr-triage` handoff comment), decide which template to use in Step 4:
+
+- **Lightweight spec** — Size is XXS, XS, or S (~2 days or less). These are small, well-bounded tasks; a lean doc is faster to write and easier to act on.
+- **Full spec** — Size is M, L, XL, or XXL. These need the complete template.
+
+If Size is unknown, default to the **Full spec**.
+
+---
+
 ### Step 3 — Investigate current product behavior (run both in parallel)
 
 **3a. Explore agent — understand what the dashboard currently does**
@@ -91,14 +102,65 @@ Read the top 1–3 matched files. Pick by summary fit to the task, not just rank
 
 Produce the spec below to the conversation. Write from a product perspective: what the user experiences, what the system must do, and what conditions must be true for the feature to be considered complete.
 
-**Rules:**
+**Rules (apply to both templates):**
 - No code snippets, file paths, or line numbers anywhere in the output.
 - Requirements must be behavioral: "The user can do X" or "The system must Y."
 - Every requirement must be verifiable: someone should be able to test whether it passes or fails.
 - Where behavior differs by client, call it out explicitly.
 - If something is unknown or needs eng input to verify, put it in Open Questions.
 
-Use this template:
+---
+
+#### Template A — Lightweight (Size: XXS / XS / S)
+
+Use for small, well-bounded tasks. Skip the full persona and background sections — the problem and acceptance criteria are enough to act on.
+
+```
+## Feature Requirements: <Task Name> · Size: <S/XS/XXS>
+
+**Asana task:** <name> `<gid>` | Priority: <…> | Pod: <…> | Customer: <…>
+
+---
+
+### Problem Statement
+
+<1–2 sentences. What gap does this fill, for whom?
+E.g.: "Compliance analysts at Tazapay cannot see which queue each alert came from, forcing them to cross-reference a separate spreadsheet.">
+
+---
+
+### Current State
+
+<1–3 bullets on what exists today and what's missing. Observable behavior only.>
+
+---
+
+### Requirements
+
+<3–6 numbered requirements. Keep each to one testable sentence.>
+
+---
+
+### Acceptance Criteria
+
+- [ ] Given <condition>, when <action>, then <observable result>
+- [ ] …
+<3–5 items. Concrete enough for QA or PM to verify without eng.>
+
+---
+
+### Out of Scope
+
+<1–3 bullets. Related capabilities explicitly excluded.>
+
+### Open Questions
+
+<Only if there are genuine blockers. Skip section entirely if none.>
+```
+
+---
+
+#### Template B — Full spec (Size: M / L / XL / XXL)
 
 ```
 ## Feature Requirements: <Task Name>
@@ -184,6 +246,31 @@ Link to separate Asana tickets where they exist.>
 <Unresolved questions that need an answer before or during implementation.
 Each should have an owner (PM, eng, data, design) and what the decision unblocks.
 E.g.: "Do we show this to all clients or only the requesting customer? Owner: PM">
+```
+
+---
+
+#### Priority & Sizing Summary (append to every spec, both templates)
+
+This section appears at the bottom of every spec so readers understand how the feature was prioritized.
+
+```
+---
+
+### Priority & Sizing Summary
+
+| Field | Value |
+|---|---|
+| **Priority** | <Very High / High / Medium / Low> |
+| **Size** | <XXS / XS / S / M / L / XL / XXL> (~<effort>) |
+| **ARR at stake** | <$X — from Asana ARR field or description; or "not stated"> |
+| **Requesting clients** | <N — names if available> |
+| **Source** | <Client / Internal / Pre-sales / Big Rock> |
+| **Scored by** | /pfr-triage · Sardine Investigative Tools adapted RICE |
+
+**Key driver:** <1 sentence explaining the dominant factor. E.g.: "ARR $1.4M from a single compliance-critical client; regulatory filing obligation triggers strategic override." Or: "Low ARR but trivially small effort (XS) makes this High ROI.">
+
+<If Priority is still TBD in Asana and this value came from a /pfr-triage handoff, note: "⚠ Priority not yet updated in Asana — using /pfr-triage recommendation.">
 ```
 
 ---
