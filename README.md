@@ -32,6 +32,7 @@ Skills for continuous customer discovery and sentiment analysis.
 | Skill | What it does |
 |-------|--------------|
 | `/dashboard-sentiment` | Weekly customer sentiment scan for Investigative Tools — pulls signals from Pylon, Asana, Notion, and Slack; synthesizes themes with PRD-ready problem statements; creates a Notion report and sends a Slack DM summary |
+| `/areq-coverage-refresh` | Re-run the Sardine EMV 3DS AReq → Customers API field coverage analysis when new information arrives — reads the current Notion analysis doc and sandbox mapping, pulls context from a Slack thread, verifies against sardine-kb, and updates the Notion doc |
 
 ### Release Notes
 Skills for managing the monthly product release notes workflow.
