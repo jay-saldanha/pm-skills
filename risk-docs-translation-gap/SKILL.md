@@ -1,12 +1,18 @@
 ---
 name: risk-docs-translation-gap
-description: Audit translated files (es, ja, pt-BR) against English source in risk-docs — lists missing files per language, orphaned translation files, coverage percentages, and optionally posts a Notion report.
+description: Audit translated files (es, ja, pt-BR) against English source in risk-docs — lists missing files per language, stale translations where English was updated after the translation, orphaned translation files, coverage percentages, and optionally posts a Notion report.
 argument-hint: "[--lang es|ja|pt-BR] [--section guides|snippets|root] [--notion] [--dry-run]"
 ---
 
 # risk-docs-translation-gap
 
-Compares all English-source content files in `sardine-ai/risk-docs` against each translation tree (`es/`, `ja/`, `pt-BR/`). Produces a full gap report: missing files per language, orphaned translation files with no English counterpart, and coverage percentages by section. Optionally writes the report to Notion.
+Compares all English-source content files in `sardine-ai/risk-docs` against each translation tree (`es/`, `ja/`, `pt-BR/`). Produces a full gap report with three gap types:
+
+1. **Missing** — file exists in English but has no translated counterpart at all
+2. **Stale** — translated file exists but the English source was committed more recently, meaning the translation is out of date
+3. **Orphaned** — file exists in the translation dir but has no English source (likely renamed or deleted)
+
+Coverage percentages are reported for both presence (file exists) and freshness (file exists AND is up to date).
 
 `$ARGUMENTS` usage:
 - `--lang es|ja|pt-BR` — scope to one language. Omit to audit all three.
@@ -81,29 +87,70 @@ Store result as `ES_FILES`, `JA_FILES`, `PT_FILES`.
 
 ## Step 4 — Compute the gap
 
-For each language, compute:
+For each language, compute three gap types.
 
 ### 4a. Missing from translation
-Files in `EN_FILES` but NOT in `{LANG}_FILES`. These are files that exist in English but have no translated counterpart.
+Files in `EN_FILES` but NOT in `{LANG}_FILES`. These are files that exist in English but have no translated counterpart at all.
 
 ```
 MISSING_{LANG} = EN_FILES - {LANG}_FILES
 ```
 
-### 4b. Orphaned in translation
-Files in `{LANG}_FILES` but NOT in `EN_FILES`. These exist in the translation dir but have no English source — likely stale, renamed, or never created in English.
+### 4b. Stale translations
+For every file that IS present in both English and the translation (i.e., `EN_FILES ∩ {LANG}_FILES`), compare the last-commit date of the English file against the last-commit date of the translated file.
+
+Get the last-commit date for a file:
+```bash
+# English file
+git -C /Users/jayana/risk-docs log -1 --format="%cd" --date=short -- "<file_path>"
+
+# Translated file (e.g. for es/)
+git -C /Users/jayana/risk-docs log -1 --format="%cd" --date=short -- "es/<file_path>"
+```
+
+If the English file's last-commit date is **later** than the translated file's last-commit date, the translation is stale — it existed before the English page was updated.
+
+For efficiency, batch this with a single `git log` call across all files rather than one call per file:
+```bash
+# Get last-commit date for every file at once (English)
+git -C /Users/jayana/risk-docs log --format="%cd %H" --date=short --name-only -- <files...> \
+  | awk '/^[0-9]{4}/ { date=$1 } /\.(mdx|yaml|md)$/ { print date "\t" $0 }'
+
+# Same for translation dir
+git -C /Users/jayana/risk-docs log --format="%cd %H" --date=short --name-only -- <translated_files...> \
+  | awk '/^[0-9]{4}/ { date=$1 } /\.(mdx|yaml|md)$/ { print date "\t" $0 }'
+```
+
+Record for each stale file:
+- `file` — the relative path (without lang prefix)
+- `en_last_updated` — date of last English commit
+- `translation_last_updated` — date of last translated commit
+- `days_behind` — integer difference in days
+
+```
+STALE_{LANG} = { file | file ∈ EN_FILES ∩ {LANG}_FILES AND en_last_updated > translation_last_updated }
+```
+
+### 4c. Orphaned in translation
+Files in `{LANG}_FILES` but NOT in `EN_FILES`. These exist in the translation dir but have no English source — likely renamed or deleted in English.
 
 ```
 ORPHANED_{LANG} = {LANG}_FILES - EN_FILES
 ```
 
-### 4c. Coverage percentage
+### 4d. Coverage percentages
+Report two coverage numbers per language:
+
 ```
-COVERAGE_{LANG} = (|EN_FILES| - |MISSING_{LANG}|) / |EN_FILES| * 100
+PRESENCE_COVERAGE_{LANG}  = (|EN_FILES| - |MISSING_{LANG}|) / |EN_FILES| * 100
+FRESHNESS_COVERAGE_{LANG} = (|EN_FILES| - |MISSING_{LANG}| - |STALE_{LANG}|) / |EN_FILES| * 100
 ```
 
-### 4d. Breakdown by section
-Within `MISSING_{LANG}`, group by section prefix:
+`PRESENCE_COVERAGE` answers: "does a translated file exist?"
+`FRESHNESS_COVERAGE` answers: "does a translated file exist AND is it up to date?"
+
+### 4e. Breakdown by section
+Apply section grouping to all three gap types (`MISSING`, `STALE`, `ORPHANED`):
 - `guides/api-reference/` — API reference
 - `guides/integration/` — Integration guides
 - `guides/knowledge-base/` — Knowledge base
@@ -115,7 +162,7 @@ Within `MISSING_{LANG}`, group by section prefix:
 
 ## Step 5 — Print the gap report
 
-Output the following structure. Keep it scannable — one row per file in the missing lists.
+Output the following structure. Keep it scannable.
 
 ```
 ## Risk-Docs Translation Gap Report — YYYY-MM-DD
@@ -127,62 +174,76 @@ Output the following structure. Keep it scannable — one row per file in the mi
 
 ### Coverage Summary
 
-| Language | Translated | Missing | Orphaned | Coverage |
-|---|---|---|---|---|
-| Spanish (es/) | N | N | N | N% |
-| Japanese (ja/) | N | N | N | N% |
-| Portuguese-BR (pt-BR/) | N | N | N | N% |
+| Language | Presence coverage | Freshness coverage | Missing | Stale | Orphaned |
+|---|---|---|---|---|---|
+| Spanish (es/) | N% | N% | N | N | N |
+| Japanese (ja/) | N% | N% | N | N | N |
+| Portuguese-BR (pt-BR/) | N% | N% | N | N | N |
+
+Presence coverage = file exists in translation dir
+Freshness coverage = file exists AND is not out of date vs English source
 
 ---
 
-### Spanish (es/) — Missing Files (N total)
+### Spanish (es/)
 
-#### API Reference (N)
+#### Missing Files (N) — no translated counterpart exists
+
+##### API Reference (N)
 - guides/api-reference/...
 
-#### Integration Guides (N)
+##### Integration Guides (N)
 - guides/integration/...
 
-#### Knowledge Base (N)
+##### Knowledge Base (N)
 - guides/knowledge-base/...
 
-#### Release Notes (N)
+##### Release Notes (N)
 - guides/release-notes/...
 
-#### Snippets (N)
+##### Snippets (N)
 - snippets/...
 
-#### Root-level (N)
+##### Root-level (N)
 - home.mdx
 - bankapi.yaml
+
+#### Stale Translations (N) — English updated after translation
+
+| File | EN last updated | Translation last updated | Days behind |
+|---|---|---|---|
+| guides/knowledge-base/foo.mdx | 2026-05-10 | 2026-03-01 | 70 |
+| ... | | | |
+
+Group stale files by section (same section prefixes as missing). Sort by days_behind descending (oldest first).
 
 #### Orphaned in es/ (N) — no English counterpart
 - <file>
 
 ---
 
-### Japanese (ja/) — Missing Files (N total)
+### Japanese (ja/)
 
-[same structure]
-
----
-
-### Portuguese-BR (pt-BR/) — Missing Files (N total)
-
-[same structure]
+[same structure: Missing, Stale, Orphaned]
 
 ---
 
-### Common Gaps (missing in ALL three languages)
-- <file>
-- ...
+### Portuguese-BR (pt-BR/)
+
+[same structure: Missing, Stale, Orphaned]
+
+---
+
+### Common Gaps (all three languages)
+Files missing OR stale in all three languages simultaneously.
 
 ### Priority Recommendations
 List the top gaps to close, ordered by customer impact:
-1. Release notes — all new release notes (YYYY) untranslated in all languages
-2. Any section where >80% of files are missing in a language
-3. Root-level files (home.mdx, bankapi.yaml) missing across all languages
-4. Orphaned files that should be deleted from translation dirs
+1. Stale translations with the highest days_behind that are in high-traffic sections (knowledge-base, integration)
+2. Files missing in all three languages (especially home.mdx, bankapi.yaml)
+3. Entire sections with >80% missing in a language
+4. Release notes — new release notes untranslated in all languages
+5. Orphaned files that should be deleted from translation dirs
 ```
 
 ---
@@ -202,7 +263,10 @@ Check `~/.claude/skills/risk-docs-translation-gap/notion-page-id.txt` for a save
 Write the full report from Step 5, then append:
 
 **Section: Files to Translate (by language)**
-Three toggle blocks, one per language, each containing the full missing-file list — so the translators can use this page as a checklist.
+Three toggle blocks, one per language, each containing the full missing-file list — so translators can use this page as a checklist.
+
+**Section: Stale Translations (by language)**
+Three toggle blocks, one per language, each containing the stale-file table (file, EN last updated, translation last updated, days behind), sorted by days_behind descending. This is the highest-value section for translators working on existing languages like Spanish.
 
 **Section: Orphaned Files to Remove**
 List files that should be deleted from each translation dir because they have no English counterpart.
@@ -210,9 +274,9 @@ List files that should be deleted from each translation dir because they have no
 **Section: Audit History**
 Append a one-row summary to a running table at the bottom of the page (do not overwrite):
 
-| Date | SHA | EN files | es% | ja% | pt-BR% |
-|---|---|---|---|---|---|
-| YYYY-MM-DD | <sha> | N | N% | N% | N% |
+| Date | SHA | EN files | es presence% | es fresh% | ja presence% | ja fresh% | pt-BR presence% | pt-BR fresh% |
+|---|---|---|---|---|---|---|---|---|
+| YYYY-MM-DD | <sha> | N | N% | N% | N% | N% | N% | N% |
 
 ---
 
@@ -222,12 +286,13 @@ Print:
 ```
 ## Translation Audit Complete
 
-| Language | Coverage | Missing | Orphaned |
-|---|---|---|---|
-| es/ | N% | N files | N files |
-| ja/ | N% | N files | N files |
-| pt-BR/ | N% | N files | N files |
+| Language | Presence | Freshness | Missing | Stale | Orphaned |
+|---|---|---|---|---|---|
+| es/ | N% | N% | N files | N files | N files |
+| ja/ | N% | N% | N files | N files | N files |
+| pt-BR/ | N% | N% | N files | N files | N files |
 
+Most stale file: <file> — <N> days behind in <lang>
 Top priority: <single most impactful gap>
 Notion: <url or "skipped (no --notion flag)">
 Run again with --notion to post the report to Notion.
