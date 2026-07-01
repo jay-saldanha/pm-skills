@@ -6,19 +6,21 @@ argument-hint: "[--lang es|ja|pt-BR] [--section guides|snippets|root] [--notion]
 
 # risk-docs-translation-gap
 
-Compares all English-source content files in `sardine-ai/risk-docs` against each translation tree (`es/`, `ja/`, `pt-BR/`). Produces a full gap report with three gap types:
+Compares all English-source content files in `sardine-ai/risk-docs` against each translation tree (`es/`, `ja/`, `pt-BR/`). Produces a full gap report with four gap types:
 
 1. **Missing** — file exists in English but has no translated counterpart at all
 2. **Stale** — translated file exists but the English source was committed more recently, meaning the translation is out of date
-3. **Orphaned** — file exists in the translation dir but has no English source (likely renamed or deleted)
+3. **Pasted** — translated file exists and has a recent commit date, but its prose content is identical (or nearly identical) to the English source — the file was copied but never actually translated
+4. **Orphaned** — file exists in the translation dir but has no English source (likely renamed or deleted)
 
-Coverage percentages are reported for both presence (file exists) and freshness (file exists AND is up to date).
+Coverage percentages are reported across three dimensions: presence, freshness, and content quality.
 
 `$ARGUMENTS` usage:
 - `--lang es|ja|pt-BR` — scope to one language. Omit to audit all three.
 - `--section guides|snippets|root` — scope to one content section. Omit to audit all.
-- `--notion` — write the report to the Notion page defined in Step 5. Requires Notion MCP.
+- `--notion` — write the report to the Notion page defined in Step 6. Requires Notion MCP.
 - `--dry-run` — print the report only; do not write to Notion.
+- `--skip-content-check` — skip the prose-similarity check (Step 4e). Faster, but won't catch pasted-English files.
 
 ---
 
@@ -131,26 +133,94 @@ Record for each stale file:
 STALE_{LANG} = { file | file ∈ EN_FILES ∩ {LANG}_FILES AND en_last_updated > translation_last_updated }
 ```
 
-### 4c. Orphaned in translation
+### 4c. Pasted content (not actually translated)
+
+Skip this step if `--skip-content-check` is passed.
+
+For every file present in **both** English and the translation tree (i.e., `EN_FILES ∩ {LANG}_FILES`), compare the prose content of both files to detect untranslated copies.
+
+#### Prose extraction
+
+Before comparing, strip non-translatable content from both versions:
+
+```bash
+# For a given .mdx file, extract prose-only lines:
+# - Remove frontmatter block (lines between opening and closing ---)
+# - Remove fenced code blocks (``` ... ```)
+# - Remove MDX/JSX component-only lines (lines that are purely a tag: <Component ... /> or <Component>)
+# - Remove import/export statements
+# - Remove blank lines
+# What remains: headings (#), paragraph text, list items (-/*), table cell content
+```
+
+Use this awk script to extract prose from a file:
+
+```awk
+BEGIN { in_frontmatter=0; in_code=0; fm_count=0 }
+/^---$/ && fm_count < 2 { fm_count++; in_frontmatter = (fm_count == 1); next }
+/^```/ { in_code = !in_code; next }
+in_frontmatter || in_code { next }
+/^[[:space:]]*(import |export |<[A-Z][A-Za-z]* |\/>[[:space:]]*$)/ { next }
+/^[[:space:]]*$/ { next }
+{ print }
+```
+
+Run this on both the English file (`/Users/jayana/risk-docs/<file>`) and the translated file (`/Users/jayana/risk-docs/<lang>/<file>`), producing `EN_PROSE` and `TRANS_PROSE`.
+
+#### Similarity score
+
+```
+shared_lines  = count of lines in EN_PROSE that appear verbatim in TRANS_PROSE
+similarity    = shared_lines / max(|EN_PROSE|, 1)
+```
+
+#### Classification
+
+| Similarity | Classification | Meaning |
+|---|---|---|
+| ≥ 90% | `pasted` | English text was copied as-is; file is not translated |
+| 50–89% | `partial` | Some sections translated, some still English |
+| < 50% | `translated` | File appears genuinely translated |
+
+**Special handling for YAML files** (`apireference.yaml`, `credit-reports.yaml`, etc.): YAML structure (keys, indentation) is expected to be identical. Compare only the string *values* of translatable fields (`description:`, `title:`, `summary:`, `x-description:`). Extract them with:
+
+```bash
+grep -E '^\s+(description|title|summary|x-description):' <file> | sed 's/.*: //'
+```
+
+Apply the same similarity threshold to these value strings only.
+
+**Skip files with fewer than 5 prose lines** after extraction — too little content to judge reliably. Mark them as `too-short-to-judge` and exclude from counts.
+
+```
+PASTED_{LANG}  = { file | similarity ≥ 90% }
+PARTIAL_{LANG} = { file | 50% ≤ similarity < 90% }
+```
+
+### 4d. Orphaned in translation
 Files in `{LANG}_FILES` but NOT in `EN_FILES`. These exist in the translation dir but have no English source — likely renamed or deleted in English.
 
 ```
 ORPHANED_{LANG} = {LANG}_FILES - EN_FILES
 ```
 
-### 4d. Coverage percentages
-Report two coverage numbers per language:
+### 4e. Coverage percentages
+Report three coverage numbers per language:
 
 ```
 PRESENCE_COVERAGE_{LANG}  = (|EN_FILES| - |MISSING_{LANG}|) / |EN_FILES| * 100
 FRESHNESS_COVERAGE_{LANG} = (|EN_FILES| - |MISSING_{LANG}| - |STALE_{LANG}|) / |EN_FILES| * 100
+QUALITY_COVERAGE_{LANG}   = (|EN_FILES| - |MISSING_{LANG}| - |STALE_{LANG}| - |PASTED_{LANG}|) / |EN_FILES| * 100
 ```
 
-`PRESENCE_COVERAGE` answers: "does a translated file exist?"
-`FRESHNESS_COVERAGE` answers: "does a translated file exist AND is it up to date?"
+- `PRESENCE_COVERAGE` — does a translated file exist?
+- `FRESHNESS_COVERAGE` — does it exist AND is it up to date vs English?
+- `QUALITY_COVERAGE` — does it exist, is it up to date, AND is it actually translated (not just English pasted)?
 
-### 4e. Breakdown by section
-Apply section grouping to all three gap types (`MISSING`, `STALE`, `ORPHANED`):
+`QUALITY_COVERAGE` is the most meaningful number for assessing true translation completeness.
+
+### 4f. Breakdown by section
+Apply section grouping to all four gap types (`MISSING`, `STALE`, `PASTED`, `ORPHANED`):
 - `guides/api-reference/` — API reference
 - `guides/integration/` — Integration guides
 - `guides/knowledge-base/` — Knowledge base
@@ -174,14 +244,15 @@ Output the following structure. Keep it scannable.
 
 ### Coverage Summary
 
-| Language | Presence coverage | Freshness coverage | Missing | Stale | Orphaned |
-|---|---|---|---|---|---|
-| Spanish (es/) | N% | N% | N | N | N |
-| Japanese (ja/) | N% | N% | N | N | N |
-| Portuguese-BR (pt-BR/) | N% | N% | N | N | N |
+| Language | Presence | Freshness | Quality | Missing | Stale | Pasted | Orphaned |
+|---|---|---|---|---|---|---|---|
+| Spanish (es/) | N% | N% | N% | N | N | N | N |
+| Japanese (ja/) | N% | N% | N% | N | N | N | N |
+| Portuguese-BR (pt-BR/) | N% | N% | N% | N | N | N | N |
 
-Presence coverage = file exists in translation dir
-Freshness coverage = file exists AND is not out of date vs English source
+- Presence = file exists in translation dir
+- Freshness = file exists AND not out of date vs English source
+- Quality = file exists, up to date, AND actually translated (not English pasted)
 
 ---
 
@@ -215,7 +286,19 @@ Freshness coverage = file exists AND is not out of date vs English source
 | guides/knowledge-base/foo.mdx | 2026-05-10 | 2026-03-01 | 70 |
 | ... | | | |
 
-Group stale files by section (same section prefixes as missing). Sort by days_behind descending (oldest first).
+Group by section, sort by days_behind descending.
+
+#### Pasted Content (N) — file exists but English text was not translated
+
+| File | Similarity | Classification |
+|---|---|---|
+| guides/integration/bar.mdx | 97% | pasted |
+| guides/knowledge-base/baz.mdx | 63% | partial |
+| ... | | |
+
+Group by section, sort by similarity descending (worst first).
+
+Include a note if content-check was skipped: "Content check skipped — run without --skip-content-check to detect pasted files."
 
 #### Orphaned in es/ (N) — no English counterpart
 - <file>
@@ -224,26 +307,27 @@ Group stale files by section (same section prefixes as missing). Sort by days_be
 
 ### Japanese (ja/)
 
-[same structure: Missing, Stale, Orphaned]
+[same structure: Missing, Stale, Pasted, Orphaned]
 
 ---
 
 ### Portuguese-BR (pt-BR/)
 
-[same structure: Missing, Stale, Orphaned]
+[same structure: Missing, Stale, Pasted, Orphaned]
 
 ---
 
 ### Common Gaps (all three languages)
-Files missing OR stale in all three languages simultaneously.
+Files that are missing, stale, OR pasted in all three languages simultaneously.
 
 ### Priority Recommendations
 List the top gaps to close, ordered by customer impact:
-1. Stale translations with the highest days_behind that are in high-traffic sections (knowledge-base, integration)
-2. Files missing in all three languages (especially home.mdx, bankapi.yaml)
-3. Entire sections with >80% missing in a language
-4. Release notes — new release notes untranslated in all languages
-5. Orphaned files that should be deleted from translation dirs
+1. Pasted files in high-traffic sections (knowledge-base, integration) — these appear complete but are actually English
+2. Stale translations with the highest days_behind in high-traffic sections
+3. Files missing in all three languages (especially home.mdx, bankapi.yaml)
+4. Entire sections with >80% missing in a language
+5. Release notes — new release notes untranslated in all languages
+6. Orphaned files that should be deleted from translation dirs
 ```
 
 ---
@@ -266,7 +350,10 @@ Write the full report from Step 5, then append:
 Three toggle blocks, one per language, each containing the full missing-file list — so translators can use this page as a checklist.
 
 **Section: Stale Translations (by language)**
-Three toggle blocks, one per language, each containing the stale-file table (file, EN last updated, translation last updated, days behind), sorted by days_behind descending. This is the highest-value section for translators working on existing languages like Spanish.
+Three toggle blocks, one per language, each containing the stale-file table (file, EN last updated, translation last updated, days behind), sorted by days_behind descending.
+
+**Section: Pasted Content — Not Translated (by language)**
+Three toggle blocks, one per language, each containing the pasted-file table (file, similarity %, classification). This is often the most surprising section — files that look translated but contain English prose. Sort by similarity descending (worst offenders first). If content-check was skipped, note that explicitly.
 
 **Section: Orphaned Files to Remove**
 List files that should be deleted from each translation dir because they have no English counterpart.
@@ -274,9 +361,9 @@ List files that should be deleted from each translation dir because they have no
 **Section: Audit History**
 Append a one-row summary to a running table at the bottom of the page (do not overwrite):
 
-| Date | SHA | EN files | es presence% | es fresh% | ja presence% | ja fresh% | pt-BR presence% | pt-BR fresh% |
-|---|---|---|---|---|---|---|---|---|
-| YYYY-MM-DD | <sha> | N | N% | N% | N% | N% | N% | N% |
+| Date | SHA | EN files | es presence% | es fresh% | es quality% | ja presence% | ja fresh% | ja quality% | pt-BR presence% | pt-BR fresh% | pt-BR quality% |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| YYYY-MM-DD | <sha> | N | N% | N% | N% | N% | N% | N% | N% | N% | N% |
 
 ---
 
@@ -286,13 +373,14 @@ Print:
 ```
 ## Translation Audit Complete
 
-| Language | Presence | Freshness | Missing | Stale | Orphaned |
-|---|---|---|---|---|---|
-| es/ | N% | N% | N files | N files | N files |
-| ja/ | N% | N% | N files | N files | N files |
-| pt-BR/ | N% | N% | N files | N files | N files |
+| Language | Presence | Freshness | Quality | Missing | Stale | Pasted | Orphaned |
+|---|---|---|---|---|---|---|---|
+| es/ | N% | N% | N% | N files | N files | N files | N files |
+| ja/ | N% | N% | N% | N files | N files | N files | N files |
+| pt-BR/ | N% | N% | N% | N files | N files | N files | N files |
 
-Most stale file: <file> — <N> days behind in <lang>
+Most stale: <file> — <N> days behind in <lang>
+Worst pasted: <file> — <N>% similarity in <lang>
 Top priority: <single most impactful gap>
 Notion: <url or "skipped (no --notion flag)">
 Run again with --notion to post the report to Notion.
