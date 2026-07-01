@@ -50,6 +50,7 @@ Skills for managing the `sardine-ai/risk-docs` API documentation repo and Asana 
 | `/risk-docs-drift` | Detect drift between the internal sardine-kb and external risk-docs — flags stale pages, missing coverage, and orphans; gates proposals through a content-leak filter; opens PRs, writes a Notion report, and logs an Asana ticket |
 | `/risk-docs-my-prs` | List all open PRs in risk-docs assigned to or created by me |
 | `/risk-docs-new-pages` | List all new content pages created since a given date |
+| `/risk-docs-translation-gap` | Audit translated files (es, ja, pt-BR) vs English source — lists missing files per language, orphaned translations, coverage percentages, and optionally posts a Notion report |
 | `/tw-inbox-prs` | Create draft PRs for the newest and oldest inbox tickets in the TW Asana board |
 
 ### Claude Code / Dev Utilities
