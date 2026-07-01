@@ -38,124 +38,70 @@ RISK_DOCS_SHA=$(cd /Users/jayana/risk-docs && git rev-parse --short HEAD)
 
 ---
 
-## Step 2 — Build the English file inventory
+## Step 2 — Run the existing missing + stale script
 
-Collect all English-source content files. Three buckets:
+The repo already has `scripts/find-stale-translations.js` which handles both missing and stale checks. Use it directly rather than reimplementing.
 
-### 2a. Root-level files
 ```bash
+cd /Users/jayana/risk-docs && node scripts/find-stale-translations.js --json
+```
+
+This outputs JSON with:
+- `missing` — array of `{ english, language, translated }` objects for files with no translated counterpart
+- `stale` — array of `{ english, language, translated }` for files where the English source was committed more recently than the last **bot-authored** commit to the translation
+- `upToDate` — count of checks that passed
+- `totalChecked` — total file × language combinations checked
+- `filesNeedingTranslation` — deduplicated English file list (union of missing + stale)
+
+**Important nuance in the staleness logic:** The script only treats **bot-authored commits** (from `it.sardine@sardine.ai`) as valid evidence that a file is translated. Human commits to a locale file — such as manually pasting English content — are intentionally ignored. This means a file where a human pasted English text will still show as stale if the bot has never committed to it, which is exactly correct.
+
+Apply any `--lang` or `--section` scope from `$ARGUMENTS` to filter the JSON output before continuing.
+
+Store the parsed results as `MISSING` (array) and `STALE` (array) for use in later steps.
+
+---
+
+## Step 3 — Detect orphaned translation files
+
+The existing script does not check for orphaned files (translations with no English counterpart). Compute this separately.
+
+Build the English file inventory:
+```bash
+find /Users/jayana/risk-docs/guides /Users/jayana/risk-docs/snippets -name "*.mdx" -o -name "*.yaml" \
+  | sed 's|/Users/jayana/risk-docs/||' | sort > /tmp/en_files.txt
+
 find /Users/jayana/risk-docs -maxdepth 1 \( -name "*.mdx" -o -name "*.yaml" \) \
-  | grep -v "^/Users/jayana/risk-docs/es/" \
-  | grep -v "^/Users/jayana/risk-docs/ja/" \
-  | grep -v "^/Users/jayana/risk-docs/pt-BR/" \
-  | sed 's|/Users/jayana/risk-docs/||' \
-  | sort
+  | grep -v "/es/" | grep -v "/ja/" | grep -v "/pt-BR/" \
+  | sed 's|/Users/jayana/risk-docs/||' | sort >> /tmp/en_files.txt
 ```
 
-### 2b. guides/ files
+For each language in scope, find files in the translation dir that have no English counterpart:
 ```bash
-find /Users/jayana/risk-docs/guides -name "*.mdx" -o -name "*.yaml" -o -name "*.md" \
-  | sed 's|/Users/jayana/risk-docs/||' \
-  | sort
+# Example for es/
+find /Users/jayana/risk-docs/es -name "*.mdx" -o -name "*.yaml" \
+  | sed 's|/Users/jayana/risk-docs/es/||' | sort > /tmp/es_files.txt
+
+comm -23 /tmp/es_files.txt /tmp/en_files.txt  # lines only in es/ = orphaned
 ```
 
-### 2c. snippets/ files
-```bash
-find /Users/jayana/risk-docs/snippets -name "*.mdx" -o -name "*.yaml" -o -name "*.md" \
-  | sed 's|/Users/jayana/risk-docs/||' \
-  | sort
-```
-
-Combine all three buckets into a single sorted list: `EN_FILES`. Apply any `--section` scope from `$ARGUMENTS` to filter this list before continuing.
-
-**Total English file count** = `|EN_FILES|`.
+Store as `ORPHANED_{LANG}` per language.
 
 ---
 
-## Step 3 — Build translation inventories
-
-For each language in scope (default: es, ja, pt-BR), run:
-
-```bash
-# Example for es — repeat for ja and pt-BR
-find /Users/jayana/risk-docs/es -name "*.mdx" -o -name "*.yaml" -o -name "*.md" \
-  | sed 's|/Users/jayana/risk-docs/es/||' \
-  | sort
-```
-
-Store result as `ES_FILES`, `JA_FILES`, `PT_FILES`.
-
----
-
-## Step 4 — Compute the gap
-
-For each language, compute three gap types.
-
-### 4a. Missing from translation
-Files in `EN_FILES` but NOT in `{LANG}_FILES`. These are files that exist in English but have no translated counterpart at all.
-
-```
-MISSING_{LANG} = EN_FILES - {LANG}_FILES
-```
-
-### 4b. Stale translations
-For every file that IS present in both English and the translation (i.e., `EN_FILES ∩ {LANG}_FILES`), compare the last-commit date of the English file against the last-commit date of the translated file.
-
-Get the last-commit date for a file:
-```bash
-# English file
-git -C /Users/jayana/risk-docs log -1 --format="%cd" --date=short -- "<file_path>"
-
-# Translated file (e.g. for es/)
-git -C /Users/jayana/risk-docs log -1 --format="%cd" --date=short -- "es/<file_path>"
-```
-
-If the English file's last-commit date is **later** than the translated file's last-commit date, the translation is stale — it existed before the English page was updated.
-
-For efficiency, batch this with a single `git log` call across all files rather than one call per file:
-```bash
-# Get last-commit date for every file at once (English)
-git -C /Users/jayana/risk-docs log --format="%cd %H" --date=short --name-only -- <files...> \
-  | awk '/^[0-9]{4}/ { date=$1 } /\.(mdx|yaml|md)$/ { print date "\t" $0 }'
-
-# Same for translation dir
-git -C /Users/jayana/risk-docs log --format="%cd %H" --date=short --name-only -- <translated_files...> \
-  | awk '/^[0-9]{4}/ { date=$1 } /\.(mdx|yaml|md)$/ { print date "\t" $0 }'
-```
-
-Record for each stale file:
-- `file` — the relative path (without lang prefix)
-- `en_last_updated` — date of last English commit
-- `translation_last_updated` — date of last translated commit
-- `days_behind` — integer difference in days
-
-```
-STALE_{LANG} = { file | file ∈ EN_FILES ∩ {LANG}_FILES AND en_last_updated > translation_last_updated }
-```
-
-### 4c. Pasted content (not actually translated)
+## Step 4 — Content quality check (pasted English detection)
 
 Skip this step if `--skip-content-check` is passed.
 
-For every file present in **both** English and the translation tree (i.e., `EN_FILES ∩ {LANG}_FILES`), compare the prose content of both files to detect untranslated copies.
+The existing scripts do not check whether translated files contain actual translations or just copied English text. This step fills that gap.
 
-#### Prose extraction
+For every file that is **not** in `MISSING` and **not** in `STALE` (i.e., it exists and was last committed by the bot after the English source), compare the prose content of both versions to detect untranslated copies.
 
-Before comparing, strip non-translatable content from both versions:
+### 4a. Prose extraction
 
-```bash
-# For a given .mdx file, extract prose-only lines:
-# - Remove frontmatter block (lines between opening and closing ---)
-# - Remove fenced code blocks (``` ... ```)
-# - Remove MDX/JSX component-only lines (lines that are purely a tag: <Component ... /> or <Component>)
-# - Remove import/export statements
-# - Remove blank lines
-# What remains: headings (#), paragraph text, list items (-/*), table cell content
-```
-
-Use this awk script to extract prose from a file:
+Strip non-translatable content from both the English and translated versions before comparing:
 
 ```awk
+# Extract prose-only lines from an .mdx file
 BEGIN { in_frontmatter=0; in_code=0; fm_count=0 }
 /^---$/ && fm_count < 2 { fm_count++; in_frontmatter = (fm_count == 1); next }
 /^```/ { in_code = !in_code; next }
@@ -165,61 +111,56 @@ in_frontmatter || in_code { next }
 { print }
 ```
 
-Run this on both the English file (`/Users/jayana/risk-docs/<file>`) and the translated file (`/Users/jayana/risk-docs/<lang>/<file>`), producing `EN_PROSE` and `TRANS_PROSE`.
+This retains: headings (`#`), paragraph text, list items (`-`/`*`), table cell text.
+This strips: frontmatter block, fenced code blocks, MDX/JSX component tags, import/export lines.
 
-#### Similarity score
+Run on both `risk-docs/<file>` (English) and `risk-docs/<lang>/<file>` (translation).
 
-```
-shared_lines  = count of lines in EN_PROSE that appear verbatim in TRANS_PROSE
-similarity    = shared_lines / max(|EN_PROSE|, 1)
-```
-
-#### Classification
-
-| Similarity | Classification | Meaning |
-|---|---|---|
-| ≥ 90% | `pasted` | English text was copied as-is; file is not translated |
-| 50–89% | `partial` | Some sections translated, some still English |
-| < 50% | `translated` | File appears genuinely translated |
-
-**Special handling for YAML files** (`apireference.yaml`, `credit-reports.yaml`, etc.): YAML structure (keys, indentation) is expected to be identical. Compare only the string *values* of translatable fields (`description:`, `title:`, `summary:`, `x-description:`). Extract them with:
+**Special handling for YAML files** (`apireference.yaml`, `credit-reports.yaml`, etc.): YAML structure is expected to be identical across languages — only the values of translatable fields matter. Compare only values of `description:`, `title:`, `summary:`, and `x-description:` keys:
 
 ```bash
 grep -E '^\s+(description|title|summary|x-description):' <file> | sed 's/.*: //'
 ```
 
-Apply the same similarity threshold to these value strings only.
+### 4b. Similarity score
 
-**Skip files with fewer than 5 prose lines** after extraction — too little content to judge reliably. Mark them as `too-short-to-judge` and exclude from counts.
+```
+shared_lines = count of lines in EN_PROSE that appear verbatim in TRANS_PROSE
+similarity   = shared_lines / max(|EN_PROSE|, 1)
+```
+
+### 4c. Classification
+
+| Similarity | Classification | Meaning |
+|---|---|---|
+| ≥ 90% | `pasted` | English text was copied as-is; not translated |
+| 50–89% | `partial` | Some sections translated, some still English |
+| < 50% | `translated` | File appears genuinely translated |
+
+**Skip files with fewer than 5 prose lines** after extraction — too little content to judge. Mark as `too-short-to-judge` and exclude from counts.
 
 ```
 PASTED_{LANG}  = { file | similarity ≥ 90% }
 PARTIAL_{LANG} = { file | 50% ≤ similarity < 90% }
 ```
 
-### 4d. Orphaned in translation
-Files in `{LANG}_FILES` but NOT in `EN_FILES`. These exist in the translation dir but have no English source — likely renamed or deleted in English.
+### 4d. Coverage percentages
 
 ```
-ORPHANED_{LANG} = {LANG}_FILES - EN_FILES
+PRESENCE_COVERAGE_{LANG}  = (total_checks - |MISSING_{LANG}|) / total_checks * 100
+FRESHNESS_COVERAGE_{LANG} = (total_checks - |MISSING_{LANG}| - |STALE_{LANG}|) / total_checks * 100
+QUALITY_COVERAGE_{LANG}   = (total_checks - |MISSING_{LANG}| - |STALE_{LANG}| - |PASTED_{LANG}|) / total_checks * 100
 ```
 
-### 4e. Coverage percentages
-Report three coverage numbers per language:
-
-```
-PRESENCE_COVERAGE_{LANG}  = (|EN_FILES| - |MISSING_{LANG}|) / |EN_FILES| * 100
-FRESHNESS_COVERAGE_{LANG} = (|EN_FILES| - |MISSING_{LANG}| - |STALE_{LANG}|) / |EN_FILES| * 100
-QUALITY_COVERAGE_{LANG}   = (|EN_FILES| - |MISSING_{LANG}| - |STALE_{LANG}| - |PASTED_{LANG}|) / |EN_FILES| * 100
-```
+`total_checks` = number of English files in scope (from Step 2 JSON `totalChecked / 3`).
 
 - `PRESENCE_COVERAGE` — does a translated file exist?
-- `FRESHNESS_COVERAGE` — does it exist AND is it up to date vs English?
-- `QUALITY_COVERAGE` — does it exist, is it up to date, AND is it actually translated (not just English pasted)?
+- `FRESHNESS_COVERAGE` — does it exist AND was the bot the last to commit it (after the English source)?
+- `QUALITY_COVERAGE` — does it exist, is it fresh, AND does it contain actual translated prose?
 
-`QUALITY_COVERAGE` is the most meaningful number for assessing true translation completeness.
+`QUALITY_COVERAGE` is the most meaningful real-world number.
 
-### 4f. Breakdown by section
+### 4e. Breakdown by section
 Apply section grouping to all four gap types (`MISSING`, `STALE`, `PASTED`, `ORPHANED`):
 - `guides/api-reference/` — API reference
 - `guides/integration/` — Integration guides
